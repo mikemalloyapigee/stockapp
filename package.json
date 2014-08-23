@@ -1,0 +1,49 @@
+{
+  "name": "stockapp",
+  "version": "0.0.1",
+  "private": "true",
+  "description": "My new Apigee 127 Project",
+  "keywords": [],
+  "author": "",
+  "license": "",
+  "main": "app.js",
+  "dependencies": {
+    "underscore": "",
+    "express": "",
+    "swagger-tools": "",
+    "volos-swagger": "",
+    "jade": "*",
+    "stylus": "*",
+	"serve-favicon": "*",
+	"morgan": "*",
+	"body-parser": "*",
+	"method-override": "*",
+	"passport": "*",
+	"passport-facebook": "*",
+	"cookie-parser":"*",
+	"express-session":"*",
+	"volos-management-redis":"*",
+	"volos-oauth-redis":"*",
+	"volos-quota-redis":"*",
+	"volos-quota-memory":"*",
+	"volos-cache-redis":"*",
+	"volos-cache-memory":"*",
+	"request":"*",
+	"usergrid":"*"
+  },
+  "devDependencies": {
+    "should": "3.1.x"
+  },
+  "scripts": {
+    "start": "node app.js"
+  },
+  "api": {
+    "name": "stockapp",
+    "basePath": "/api",
+    "docsPath": "/docs",
+    "main": "app.js"
+  },
+  "dist": {
+    "shasum": "54e7094bad32c2f762d4fc93a6c0c2db77aaee49"
+  }
+}

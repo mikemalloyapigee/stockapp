@@ -1,0 +1,15 @@
+extends layout
+
+block content
+  div.container
+    h1(class="page-header") Portfolio Summary
+    p
+      |Total Value: $ #{value}
+    p
+      |Daily Change in Value: $ #{change}
+    p
+      |Largest Gain: #{biggest_gain.name}  $ #{biggest_gain.change}
+    p
+      |Largest Loss: #{biggest_loss.name}  $ #{biggest_loss.change}
+    
+    

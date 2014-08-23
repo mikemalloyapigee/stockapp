@@ -1,0 +1,9 @@
+extends layout
+
+block content
+  div.container
+    h1 Sell Stock
+    form(method="post", id="sellForm")
+      input.input-small(id="ticker", type="text", name="ticker", placeholder="Ticker Symbol")
+      input.input-small(id="shares", type="number", name="shares", placeholder="Number of Shares")
+      input.btn.small(type="submit", value="Sell Shares")

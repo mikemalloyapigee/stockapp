@@ -1,0 +1,22 @@
+extends layout
+
+block content
+  div.container
+    h1(class="page-header") Portfolio
+    table(class="table table-striped table-bordered")
+      thead
+        th Ticker
+        th Company Name
+        th Shares
+        th Price
+        th Change
+        th Value
+      tbody
+      each stock in stocks
+        tr
+          td #{stock.ticker}
+          td #{stock.name}
+          td #{stock.shares}
+          td $ #{stock.price}
+          td $ #{stock.change}
+          td $ #{stock.value}
