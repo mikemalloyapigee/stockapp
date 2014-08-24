@@ -86,7 +86,6 @@ passport.deserializeUser(function(obj, done) {
 
 var oauth;
 var application;
-var token;
 function initOauth(app) {
   console.log("App:" + app);
   application = app;
@@ -121,11 +120,13 @@ function setupAccess(req, res, next){
 }
 
 function setAccessToken(req, res, next){
-  init.createToken(application, oauth, function(creds) {
+  init.tokenGenerator(application, oauth, function(creds) {
     req.session.access_token = creds.accessToken;
     next();
   });
 }
+
+
 
 
 

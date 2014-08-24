@@ -34,10 +34,10 @@ function createApp(cb) {
   var management = volos.Management.create(_.extend({ encryptionKey: 'abc123'}, config.redisConfig) );
 
   var devRequest = {
-    firstName: 'Scott',
-    lastName: 'Ganyo',
-    email: 'sganyo@apigee.com',
-    userName: 'sganyo'
+    firstName: 'Mike',
+    lastName: 'Malloy',
+    email: 'mmalloy@apigee.com',
+    userName: 'mmalloy'
   };
 
   management.deleteDeveloper(devRequest.email, function() {
@@ -46,7 +46,7 @@ function createApp(cb) {
     management.createDeveloper(devRequest , function(err, developer) {
       if (err) { throw err; }
 
-      var appRequest = { name: 'Test App', developerId: developer.id };
+      var appRequest = { name: 'Stock App', developerId: developer.id };
       console.log('Creating application %s for developer %s', appRequest.name, developer.id);
 
       management.createApp(appRequest, function(err, app) {
@@ -58,25 +58,16 @@ function createApp(cb) {
 }
 
 
-function createToken(app, oauth, cb) {
-
-  var tokenRequest = {
-    clientId: app.credentials[0].key,
-    clientSecret: app.credentials[0].secret
+function tokenGenerator(app, oauth, cb) {
+  var request = {
+      grant_type: 'client_credentials',
+      client_id: app.credentials[0].key,
+      client_secret: app.credentials[0].secret
   };
-
-  oauth.spi.createTokenClientCredentials(tokenRequest, function(err, result) {
-    if (err) { throw err; }
-
-    var accessToken = result.access_token;
-
-    console.log('Client ID: %s', app.credentials[0].key);
-    console.log('Client Secret: %s', app.credentials[0].secret);
-    console.log('Access Token: %s', accessToken);
-
-    tokenRequest.accessToken = accessToken;
-
-    cb(tokenRequest);
+  oauth.generateToken(request, function(err, reply) {
+      var token = reply.access_token;
+      request.accessToken = token;
+      cb(request);
   });
 }
-
+exports.tokenGenerator = tokenGenerator;
