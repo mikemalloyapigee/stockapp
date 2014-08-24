@@ -24,7 +24,7 @@
 'use strict';
 
 exports.createApp = createApp;
-exports.createToken = createToken;
+
 var _ = require("underscore");
 
 function createApp(cb) {
