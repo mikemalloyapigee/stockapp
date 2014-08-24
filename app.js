@@ -113,7 +113,7 @@ function initOauth(app) {
 function setupAccess(req, res, next){
   if(req.user === undefined || req.session.access_token === undefined){res.redirect("/");}
   else{
-    token = req.session.access_token;
+    var token = req.session.access_token;
     req.headers.authorization = "Bearer " + token;
     next();
   }
