@@ -23,8 +23,7 @@ function enforceTradeLimit(req, resp, next) {
     if (!result.isAllowed) {
         msg = "You have exceeded your trade limit for the day.  Your trade did not go through";
         resp.render("error_page", {error_message: msg});
-    }
-    next();
+    } else {next();}
   });
 }
 exports.enforceTradeLimit = enforceTradeLimit;
@@ -36,8 +35,7 @@ function checkTradeLimit(req, resp, next) {
     if (!result.isAllowed) {
       msg = "You have exceeded your trade limit for the day.";
       resp.render("error_page", {error_message: msg});
-    }
-    next();
+    } else {next();}
   });
 }
 exports.checkTradeLimit = checkTradeLimit;
@@ -78,7 +76,6 @@ function getStockData(req, res, cb){
     }
   });
 }
-  
 exports.getStockData = getStockData;
 
 function getSummaryData(req, res, cb){
@@ -133,14 +130,13 @@ function savePortfolio(req, stock_data, summary){
 
 exports.setupPortfolio = function(req, res){
   initializePortfolio(req, res, function(entity){
-      console.log("got stock data");
-      stock_data = entity.get('stocks');
-      updatePortfolio(stock_data, function(port){
-        summarizePortfolio(port, function(summary){
-          savePortfolio(req, port, summary);
-          res.render("summary", JSON.parse(summary));
-          });
+    stock_data = entity.get('stocks');
+    updatePortfolio(stock_data, function(port){
+      summarizePortfolio(port, function(summary){
+        savePortfolio(req, port, summary);
+        res.render("summary", JSON.parse(summary));
         });
+      });
   });
 }
 
@@ -153,20 +149,23 @@ exports.sellStock = function(req, res){
   cache.delete(summary_key, function(err, reply){});
   getStockData(req, res, function(stock_data){
     var stock = stock_data[ticker];
-    stock["shares"] = stock["shares"] - number;
-    if(stock["shares"] < 0){stock["shares"] = 0;}
-    stock_update = JSON.stringify(stock_data);
-    updatePortfolio(stock_update, function(port){
-      summarizePortfolio(port, function(summary){
-        savePortfolio(req, port, summary);
-        res.render("summary", JSON.parse(summary));
+    if(stock !== undefined){
+      stock["shares"] = stock["shares"] - number;
+      if(stock["shares"] < 0){stock["shares"] = 0;}
+      stock_update = JSON.stringify(stock_data);
+      updatePortfolio(stock_update, function(port){
+        summarizePortfolio(port, function(summary){
+          savePortfolio(req, port, summary);
+          res.render("summary", JSON.parse(summary));
+          });
         });
-      });
+      }
   });
 }
 
 exports.buyStock = function(req,res){
-  var ticker = (req.body.ticker).toUpperCase();
+  var ticker = (req.body.ticker).toUpperCase().replace(/\ /g, '');
+  console.log("Buying ticker: " + ticker);
   var number = Number(req.body.shares);
   //invalidate the cache
   var stock_key = req.user.id + "stockdata";
@@ -191,16 +190,13 @@ exports.buyStock = function(req,res){
   });
 }
 
-
-function updatePortfolio(stock_data, cb){
-  var ticker_symbols = _.keys(JSON.parse(stock_data));
+function getQuotes(ticker_symbols, cb){
   var ticker_string = "(";
   for(var i=0; i<ticker_symbols.length; i++){
     ticker_string = ticker_string + "\"" + ticker_symbols[i] + "\"";
     if(i<ticker_symbols.length-1){ticker_string = ticker_string + ",";}
   }
   ticker_string = ticker_string + ")";
-  console.log("Ticker string: " + ticker_string);
   encoded_ticker_string = encodeURIComponent(ticker_string);
   yqlstart="https://query.yahooapis.com/v1/public/yql?q=select%20*%20from%20yahoo.finance.quote%20where%20symbol%20in%20"
   end_str="&format=json&diagnostics=true&env=store%3A%2F%2Fdatatables.org%2Falltableswithkeys&callback="
@@ -210,29 +206,40 @@ function updatePortfolio(stock_data, cb){
     if(error){console.log("Error getting stock data");}
     else { 
       var yresults = JSON.parse(body);
-      var quotes = yresults.query.results.quote; 
-      var days_results = JSON.parse(stock_data);
-      
-      for(var i=0; i<quotes.length; i++){  
-        var ticker = quotes[i].Symbol;
-        console.log(days_results[ticker]);
-        days_results[ticker]["name"] = quotes[i].Name;
-        days_results[ticker]["price"] = Number(quotes[i].LastTradePriceOnly).toFixed(2);
-        days_results[ticker]["change"] = Number(quotes[i].Change * days_results[ticker].shares).toFixed(2);
-        days_results[ticker]["current_value"] = Number(quotes[i].LastTradePriceOnly * days_results[ticker].shares).toFixed(2);
-        
-      }
-      cb(JSON.stringify(days_results));
+      var quotes = yresults.query.results.quote;
+      cb(quotes);
     }
   });
-}  
+}
+exports.getQuotes = getQuotes;
+
+
+function updatePortfolio(stock_data, cb){
+  var ticker_symbols = _.keys(JSON.parse(stock_data));
+  getQuotes(ticker_symbols, function(quotes){
+    var s_data = JSON.parse(stock_data);
+    var retval = {}
+    _.each(quotes, function(quote){  
+      var ticker = quote.Symbol;
+      var shares = s_data[ticker].shares;
+      var value = Number(quote.LastTradePriceOnly * shares).toFixed(2);
+      if(value > 0.00){
+        retval[ticker] = {};
+        retval[ticker]["name"] = quote.Name;
+        retval[ticker]["shares"] = shares;
+        retval[ticker]["price"] = Number(quote.LastTradePriceOnly).toFixed(2);
+        retval[ticker]["change"] = Number(quote.Change * shares).toFixed(2);
+        retval[ticker]["current_value"] = value;
+      }
+    });
+    cb(JSON.stringify(retval));
+  });
+} 
 
 function summarizePortfolio(port, cb){
   console.log("summarizing portfolio")
   var portfolio = JSON.parse(port);
-  var keys = _.keys(portfolio);
-  console.log("keys:\n" + keys);
-  console.log("port:\n" + portfolio);
+  var keys = _.reject(_.keys(portfolio), function(symbol){symbol == "";});
   var total_value = _.reduce(keys, function(memo, key){return memo + Number(portfolio[key]["current_value"]);}, 0);
   var total_change = _.reduce(keys, function(memo, key){return memo + Number(portfolio[key]["change"])}, 0);
   var max_change = _.max(keys, function(key){return Number(portfolio[key]["change"]);});
