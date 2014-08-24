@@ -2,8 +2,8 @@
 
 /**** Init ****/
 
-var config = require('./config');
-var express = require('express')
+var config = require('./config')
+  , express = require('express')
   , routes = require('./routes')
   , http = require('http')
   , path = require('path')
@@ -15,8 +15,6 @@ var express = require('express')
   , session = require('express-session')
   , init = require('./init')
   , volos = require('./volos')
-  , request = require('request')
-  , usergrid = require('usergrid')
   , portfolio = require('./portfolio');
  
 
@@ -42,23 +40,34 @@ function startExpress(){
   app.use(passport.initialize());
   app.use(passport.session());
 
+  //
+  // The functional API
+  //
+  app.get('/', routes.index);
   app.get('/success', setAccessToken, setupAccess, oauth.expressMiddleware().authenticate(), portfolio.setupPortfolio);
   app.get('/view_portfolio', setupAccess, oauth.expressMiddleware().authenticate(), routes.view_portfolio );
   app.get('/buy', setupAccess, oauth.expressMiddleware().authenticate(), routes.show_buy_form);
-  app.post('/buy', portfolio.enforceTradeLimit, setupAccess, oauth.expressMiddleware().authenticate(), portfolio.buyStock);
+  app.post('/buy',  setupAccess, portfolio.enforceTradeLimit, oauth.expressMiddleware().authenticate(), portfolio.buyStock);
   app.get('/sell', setupAccess, oauth.expressMiddleware().authenticate(), routes.show_sell_form);
-  app.post('/sell', portfolio.enforceTradeLimit, setupAccess, oauth.expressMiddleware().authenticate(), portfolio.sellStock);
+  app.post('/sell', setupAccess, portfolio.enforceTradeLimit, oauth.expressMiddleware().authenticate(), portfolio.sellStock);
   app.get('/summary', setupAccess, oauth.expressMiddleware().authenticate(), routes.summary);
+  
+  //
+  // Facebook APIs
+  //
   app.get('/error', function(req, res, next) {
     msg = "There was an error while logging in"
     res.render("error_page", {error_message: msg});
   });
-  app.get('/', routes.index);
   app.get('/auth/facebook', passport.authenticate('facebook'));
   app.get('/auth/facebook/callback', passport.authenticate('facebook', {
     successRedirect: '/success',
     failureRedirect: '/error'
   }));
+  
+  //
+  // Start the server
+  //
   app.listen(app.get('port'));
   console.log("Express server listening on port " + app.get('port'));
 }
@@ -107,7 +116,6 @@ function initOauth(app) {
   console.log('Initialized OAuth');
   
   startExpress();
-
 }
 
 function setupAccess(req, res, next){

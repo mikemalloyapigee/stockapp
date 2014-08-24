@@ -98,7 +98,7 @@ function createNewAccount(req, cb){
   var opts = getUsergridOptions(req);
   ug.client.createEntity(opts, function(err, o){
     if(err){console.log(err); return;}
-    o.set({"display_name": req.user.displayName, "stocks":{"AAPL":{"shares":25, "name":"Apple Inc."},"MSFT":{"shares":100, "name":"Microsoft"},"GOOG":{"shares":150, "name":"Google Inc."}}});
+    o.set({"display_name": req.user.displayName, "stocks":{"AAPL":{"shares":25},"MSFT":{"shares":100},"GOOG":{"shares":150}}});
     o.save(function(err){
       if(err){
         console.log("Error while saving: " + err); 
@@ -122,7 +122,7 @@ function savePortfolio(req, stock_data, summary){
         var summary_key = req.user.id + "summary";
         cache.set(stock_key, stock_data);
         cache.set(summary_key, summary);
-        console.log("Updated portfolio");
+        console.log("Saved portfolio");
       }
     });
   });
@@ -134,7 +134,7 @@ exports.setupPortfolio = function(req, res){
     updatePortfolio(stock_data, function(port){
       summarizePortfolio(port, function(summary){
         savePortfolio(req, port, summary);
-        res.render("summary", JSON.parse(summary));
+        res.redirect("/summary");
         });
       });
   });
@@ -156,7 +156,7 @@ exports.sellStock = function(req, res){
       updatePortfolio(stock_update, function(port){
         summarizePortfolio(port, function(summary){
           savePortfolio(req, port, summary);
-          res.render("summary", JSON.parse(summary));
+          res.redirect("/summary");
           });
         });
       }
@@ -165,7 +165,6 @@ exports.sellStock = function(req, res){
 
 exports.buyStock = function(req,res){
   var ticker = (req.body.ticker).toUpperCase().replace(/\ /g, '');
-  console.log("Buying ticker: " + ticker);
   var number = Number(req.body.shares);
   //invalidate the cache
   var stock_key = req.user.id + "stockdata";
@@ -173,18 +172,17 @@ exports.buyStock = function(req,res){
   cache.delete(stock_key, function(err, reply){});
   cache.delete(summary_key, function(err, reply){});
   getStockData(req, res, function(stock_data){
-    var stock = stock_data[ticker];
-    if(stock === undefined){
+    if(stock_data[ticker] === undefined){
       stock_data[ticker] = {};
       stock_data[ticker]["shares"] = number;
     } else {
-      stock["shares"] = stock["shares"] + number;
+      stock_data[ticker]["shares"] = stock_data[ticker]["shares"] + number;
     }
     stock_update = JSON.stringify(stock_data);
     updatePortfolio(stock_update, function(port){
       summarizePortfolio(port, function(summary){
         savePortfolio(req, port, summary);
-        res.render("summary", JSON.parse(summary));
+        res.redirect("/summary");
         });
       });
   });
@@ -221,14 +219,14 @@ function updatePortfolio(stock_data, cb){
     var retval = {}
     _.each(quotes, function(quote){  
       var ticker = quote.Symbol;
-      var shares = s_data[ticker].shares;
-      var value = Number(quote.LastTradePriceOnly * shares).toFixed(2);
+      var shares = Number(s_data[ticker].shares);
+      var value = (Number(quote.LastTradePriceOnly) * shares).toFixed(2);
       if(value > 0.00){
         retval[ticker] = {};
         retval[ticker]["name"] = quote.Name;
         retval[ticker]["shares"] = shares;
         retval[ticker]["price"] = Number(quote.LastTradePriceOnly).toFixed(2);
-        retval[ticker]["change"] = Number(quote.Change * shares).toFixed(2);
+        retval[ticker]["change"] = (Number(quote.Change) * shares).toFixed(2);
         retval[ticker]["current_value"] = value;
       }
     });
@@ -239,7 +237,7 @@ function updatePortfolio(stock_data, cb){
 function summarizePortfolio(port, cb){
   console.log("summarizing portfolio")
   var portfolio = JSON.parse(port);
-  var keys = _.reject(_.keys(portfolio), function(symbol){symbol == "";});
+  var keys = _.keys(portfolio);
   var total_value = _.reduce(keys, function(memo, key){return memo + Number(portfolio[key]["current_value"]);}, 0);
   var total_change = _.reduce(keys, function(memo, key){return memo + Number(portfolio[key]["change"])}, 0);
   var max_change = _.max(keys, function(key){return Number(portfolio[key]["change"]);});

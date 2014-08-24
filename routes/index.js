@@ -8,7 +8,6 @@ exports.index = function(req, res){
   } else {
     res.redirect("/summary");
   }
-  
 };
 
 exports.summary = function(req, res){
