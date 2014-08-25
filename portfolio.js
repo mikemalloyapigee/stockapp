@@ -4,6 +4,9 @@ var _ = require('underscore');
 var request = require("request");
 var volos = require('./volos');
 
+//
+// Setup the cache and quota
+//
 var cache = volos.Cache.create('stockapp', {ttl: 300000,
   encoding: 'utf8',
   encryptionKey: 'abc123'
@@ -16,7 +19,13 @@ var quota = volos.Quota.create({timeUnit: 'day',
   interval: 1,
   allow: 5
   });
-
+  
+// ----------------------------------------------------------------
+// Quota enforcement policies
+// Currently checkTradeLimit() doesn't work because a 0 weight is not handled properly.  However once it is implemented, we'll use
+// it for GET requests on "/buy" and "/sell"
+//
+// ----------------------------------------------------------------
 function enforceTradeLimit(req, resp, next) {
   var hit = { identifier: req.user.id, weight: 1 };
   quota.apply(hit, function(err, result) {
@@ -43,7 +52,29 @@ function checkTradeLimit(req, resp, next) {
 }
 exports.checkTradeLimit = checkTradeLimit;
 
+// ----------------------------------------------------------------
+// Functions to initialize and get Portfolio data
+// ----------------------------------------------------------------
+//
+// Bootstrapping function called only once at the start
+//
+exports.setupPortfolio = function(req, res){
+  initializePortfolio(req, res, function(entity){
+    stock_data = entity.get('stocks');
+    console.log("Stock data: " + stock_data);
+    updatePortfolio(stock_data, function(port){
+      summarizePortfolio(port, function(summary){
+        savePortfolio(req, port, summary, function(){
+          res.redirect("/summary");
+        });
+      });
+    });
+  });  
+}
 
+//
+// Called only once as part of the bootstrap process
+//
 function initializePortfolio(req, res, cb){  
   console.log("Getting portfolio " + req.user.id );
   var options = ug.getUsergridOptions(req);
@@ -63,6 +94,13 @@ function getPortfolio(req, res, cb){
 }
 exports.getPortfolio = getPortfolio;
 
+// ----------------------------------------------------------------
+// Functions to get stock and summary data
+//
+// Currently only exposed as functions in the portfolio module but
+// could be implemented as their own APIs as a feature enhancement
+//
+// ----------------------------------------------------------------
 function getStockData(req, res, cb){
   var key = getStockKey(req);
   cache.get(key, function(err, reply){
@@ -101,7 +139,11 @@ function getSummaryData(req, res, cb){
 }
 exports.getSummaryData = getSummaryData;
 
-
+//
+// Helper function that creates a new account if one doesn't already exist
+// At the present time, you get an error if you have an empty portfolio:  TODO - add error handling for that case
+// Could possibly be moved to the ug module.
+//
 function createNewAccount(req, cb){
   var opts = ug.getUsergridOptions(req);
   ug.client.createEntity(opts, function(err, o){
@@ -119,36 +161,16 @@ function createNewAccount(req, cb){
   });
 }
 
-function savePortfolio(req, stock_data, summary, cb){
-  var opts = ug.getUsergridOptions(req);
-  ug.client.getEntity(opts, function(err, entity, data){
-    entity.set({"stocks":stock_data, "summary":summary});
-    entity.save(function(err){
-      if(err){console.log("Error saving portfolio: "+ err);}
-      else{
-        cache.set(getStockKey(req), stock_data);
-        cache.set(getSummaryKey(req), summary);
-        console.log("Saved portfolio");
-        cb();
-      }
-    });
-  });
-}
 
-exports.setupPortfolio = function(req, res){
-  initializePortfolio(req, res, function(entity){
-    stock_data = entity.get('stocks');
-    console.log("Stock data: " + stock_data);
-    updatePortfolio(stock_data, function(port){
-      summarizePortfolio(port, function(summary){
-        savePortfolio(req, port, summary, function(){
-          res.redirect("/summary");
-        });
-      });
-    });
-  });  
-}
+// ----------------------------------------------------------------
+// Buy and Sell API functions
+//
+// Exposed through the API
+// ----------------------------------------------------------------
 
+//
+// Called when you do a POST on "/sell"
+//
 exports.sellStock = function(req, res){
   var ticker = (req.body.ticker).toUpperCase();
   var number = Number(req.body.shares);
@@ -171,6 +193,9 @@ exports.sellStock = function(req, res){
   });
 }
 
+//
+// Called when you do a POST on "/buy"
+//
 exports.buyStock = function(req,res){
   var ticker = (req.body.ticker).toUpperCase().replace(/\ /g, '');
   var number = Number(req.body.shares);
@@ -195,6 +220,17 @@ exports.buyStock = function(req,res){
   });
 }
 
+
+
+// ----------------------------------------------------------------
+// Portfolio functions to Update, Summarize and Save portfolio data
+//
+// Mostly plumbing functions to update and persist the portfolio
+// ----------------------------------------------------------------
+
+//
+// Helper function to call the Yahoo! API for quotes
+//
 function getQuotes(ticker_symbols, cb){
   var ticker_string = "(";
   for(var i=0; i<ticker_symbols.length; i++){
@@ -217,7 +253,6 @@ function getQuotes(ticker_symbols, cb){
   });
 }
 exports.getQuotes = getQuotes;
-
 
 function updatePortfolio(stock_data, cb){
   var ticker_symbols = _.keys(JSON.parse(stock_data));
@@ -258,3 +293,21 @@ function summarizePortfolio(port, cb){
   if(biggest_loser){retVal["biggest_loss"] = biggest_loser;}
   cb(JSON.stringify(retVal));
 }
+
+function savePortfolio(req, stock_data, summary, cb){
+  var opts = ug.getUsergridOptions(req);
+  ug.client.getEntity(opts, function(err, entity, data){
+    entity.set({"stocks":stock_data, "summary":summary});
+    entity.save(function(err){
+      if(err){console.log("Error saving portfolio: "+ err);}
+      else{
+        // Save to the cache
+        cache.set(getStockKey(req), stock_data);
+        cache.set(getSummaryKey(req), summary);
+        console.log("Saved portfolio");
+        cb();
+      }
+    });
+  });
+}
+
