@@ -28,7 +28,7 @@ exports.show_sell_form = function(req, res){
 
 exports.view_portfolio = function(req, res){
   portfolio.getStockData(req, res, function(stocks){
-    var keys = _.keys(stocks);
+    var keys = _.keys(stocks).sort();
     var stock_list = _.map(keys, function(key){return {ticker:key, name:stocks[key]["name"], shares:stocks[key]["shares"], price:stocks[key]["price"], value:stocks[key]["current_value"], change:stocks[key]["change"]}})
     res.render('portfolio', {stocks: stock_list});
   });

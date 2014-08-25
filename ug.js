@@ -9,8 +9,11 @@ var client = new usergrid.client({
 });
 
 client.login(config.USERGRID_USER, config.USERGRID_PASSWORD, function(err, data, user){ if(err){console.log(err);}});
+exports.client=client;getUsergridOptions
 
-
-exports.client=client
+function getUsergridOptions(req){
+  return {'type':config.USERGRID_COLLECTION, 'name': req.user.id}
+}
+exports.getUsergridOptions = getUsergridOptions;
 
 

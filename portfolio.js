@@ -43,13 +43,10 @@ function checkTradeLimit(req, resp, next) {
 }
 exports.checkTradeLimit = checkTradeLimit;
 
-function getUsergridOptions(req){
-  return {'type':config.USERGRID_COLLECTION, 'name': req.user.id}
-}
 
 function initializePortfolio(req, res, cb){  
   console.log("Getting portfolio " + req.user.id );
-  var options = getUsergridOptions(req);
+  var options = ug.getUsergridOptions(req);
   ug.client.getEntity(options, function(err, entity, data){
     if(entity.get('uuid') === undefined){createNewAccount(req, function(ent){cb(ent);} );}
     else{cb(entity);}
@@ -58,7 +55,7 @@ function initializePortfolio(req, res, cb){
 
 function getPortfolio(req, res, cb){  
   console.log("Getting portfolio " + req.user.id );
-  var options = getUsergridOptions(req);
+  var options = ug.getUsergridOptions(req);
   ug.client.getEntity(options, function(err, entity, data){
     if(err){console.log("Error getting portfolio"); cb(null);}
     else {cb(entity);}
@@ -93,15 +90,12 @@ function getSummaryData(req, res, cb){
       cb(JSON.parse(reply));
     } else {
       console.log("Cache miss for summary data");
-      getPortfolio(req, res, function(port){
-        var stocks = port.get('stocks');
-        updatePortfolio(stocks, function(portfolio){
-          summarizePortfolio(portfolio, function(summary){
+      getStockData(req, res, function(portfolio){
+          summarizePortfolio(JSON.stringify(portfolio), function(summary){
             cache.set(key, summary);
             cb(JSON.parse(summary));
           });
-        });
-      });
+        }); 
     }
   });
 }
@@ -109,7 +103,7 @@ exports.getSummaryData = getSummaryData;
 
 
 function createNewAccount(req, cb){
-  var opts = getUsergridOptions(req);
+  var opts = ug.getUsergridOptions(req);
   ug.client.createEntity(opts, function(err, o){
     if(err){console.log(err); return;}
     o.set({"display_name": req.user.displayName, "stocks":{"AAPL":{"shares":25},"MSFT":{"shares":100},"GOOG":{"shares":150}}});
@@ -126,7 +120,7 @@ function createNewAccount(req, cb){
 }
 
 function savePortfolio(req, stock_data, summary, cb){
-  var opts = getUsergridOptions(req);
+  var opts = ug.getUsergridOptions(req);
   ug.client.getEntity(opts, function(err, entity, data){
     entity.set({"stocks":stock_data, "summary":summary});
     entity.save(function(err){
