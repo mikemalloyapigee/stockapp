@@ -48,7 +48,7 @@ function initializePortfolio(req, res, cb){
   console.log("Getting portfolio " + req.user.id );
   var options = ug.getUsergridOptions(req);
   ug.client.getEntity(options, function(err, entity, data){
-    if(entity.get('uuid') === undefined){createNewAccount(req, function(ent){cb(ent);} );}
+    if(entity.get('uuid') === undefined){console.log("Creating new user"); createNewAccount(req, function(ent){cb(ent);} );}
     else{cb(entity);}
   });
 }
@@ -106,7 +106,7 @@ function createNewAccount(req, cb){
   var opts = ug.getUsergridOptions(req);
   ug.client.createEntity(opts, function(err, o){
     if(err){console.log(err); return;}
-    o.set({"display_name": req.user.displayName, "stocks":{"AAPL":{"shares":25},"MSFT":{"shares":100},"GOOG":{"shares":150}}});
+    o.set({"display_name": req.user.displayName, "stocks":JSON.stringify({AAPL:{shares:25},MSFT:{shares:100},GOOG:{shares:150}})});
     o.save(function(err){
       if(err){
         console.log("Error while saving: " + err); 
@@ -138,6 +138,7 @@ function savePortfolio(req, stock_data, summary, cb){
 exports.setupPortfolio = function(req, res){
   initializePortfolio(req, res, function(entity){
     stock_data = entity.get('stocks');
+    console.log("Stock data: " + stock_data);
     updatePortfolio(stock_data, function(port){
       summarizePortfolio(port, function(summary){
         savePortfolio(req, port, summary, function(){
