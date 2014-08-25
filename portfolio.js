@@ -4,10 +4,13 @@ var _ = require('underscore');
 var request = require("request");
 var volos = require('./volos');
 
-var cache = volos.Cache.create('stockapp', {ttl: 30000,
+var cache = volos.Cache.create('stockapp', {ttl: 300000,
   encoding: 'utf8',
   encryptionKey: 'abc123'
   });
+function getStockKey(req){return req.user.id + "stockdata";}
+function getSummaryKey(req){return req.user.id + "summary";}
+
 
 var quota = volos.Quota.create({timeUnit: 'day',
   interval: 1,
@@ -64,14 +67,18 @@ function getPortfolio(req, res, cb){
 exports.getPortfolio = getPortfolio;
 
 function getStockData(req, res, cb){
-  var key = req.user.id + "stockdata";
+  var key = getStockKey(req);
   cache.get(key, function(err, reply){
-    if(reply){cb(JSON.parse(reply));}
-    else {
+    if(reply){
+      console.log("Stock data cache hit");
+      cb(JSON.parse(reply));
+    } else {
       getPortfolio(req, res, function(port){
         var stocks = port.get('stocks');
-        cache.set(key, stocks);
-        cb(JSON.parse(stocks));
+        updatePortfolio(stocks, function(portfolio){
+            cache.set(key, portfolio);
+            cb(JSON.parse(portfolio));
+        });
       });
     }
   });
@@ -79,14 +86,21 @@ function getStockData(req, res, cb){
 exports.getStockData = getStockData;
 
 function getSummaryData(req, res, cb){
-  var key = req.user.id + "summary";
+  var key = getSummaryKey(req);
   cache.get(key, function(err, reply){
-    if(reply){cb(JSON.parse(reply));}
-    else {
+    if(reply){
+      console.log("Summary Data cache hit");
+      cb(JSON.parse(reply));
+    } else {
+      console.log("Cache miss for summary data");
       getPortfolio(req, res, function(port){
-        var summary = port.get('summary');
-        cache.set(key, summary);
-        cb(JSON.parse(summary));
+        var stocks = port.get('stocks');
+        updatePortfolio(stocks, function(portfolio){
+          summarizePortfolio(portfolio, function(summary){
+            cache.set(key, summary);
+            cb(JSON.parse(summary));
+          });
+        });
       });
     }
   });
@@ -111,18 +125,17 @@ function createNewAccount(req, cb){
   });
 }
 
-function savePortfolio(req, stock_data, summary){
+function savePortfolio(req, stock_data, summary, cb){
   var opts = getUsergridOptions(req);
   ug.client.getEntity(opts, function(err, entity, data){
     entity.set({"stocks":stock_data, "summary":summary});
     entity.save(function(err){
       if(err){console.log("Error saving portfolio: "+ err);}
       else{
-        var stock_key = req.user.id + "stockdata";
-        var summary_key = req.user.id + "summary";
-        cache.set(stock_key, stock_data);
-        cache.set(summary_key, summary);
+        cache.set(getStockKey(req), stock_data);
+        cache.set(getSummaryKey(req), summary);
         console.log("Saved portfolio");
+        cb();
       }
     });
   });
@@ -133,20 +146,19 @@ exports.setupPortfolio = function(req, res){
     stock_data = entity.get('stocks');
     updatePortfolio(stock_data, function(port){
       summarizePortfolio(port, function(summary){
-        savePortfolio(req, port, summary);
-        res.redirect("/summary");
+        savePortfolio(req, port, summary, function(){
+          res.redirect("/summary");
         });
       });
-  });
+    });
+  });  
 }
 
 exports.sellStock = function(req, res){
   var ticker = (req.body.ticker).toUpperCase();
   var number = Number(req.body.shares);
-  var stock_key = req.user.id + "stockdata";
-  var summary_key = req.user.id + "summary";
-  cache.delete(stock_key, function(err, reply){});
-  cache.delete(summary_key, function(err, reply){});
+  cache.delete(getStockKey(req), function(err, reply){});
+  cache.delete(getSummaryKey(req), function(err, reply){});
   getStockData(req, res, function(stock_data){
     var stock = stock_data[ticker];
     if(stock !== undefined){
@@ -155,11 +167,12 @@ exports.sellStock = function(req, res){
       stock_update = JSON.stringify(stock_data);
       updatePortfolio(stock_update, function(port){
         summarizePortfolio(port, function(summary){
-          savePortfolio(req, port, summary);
-          res.redirect("/summary");
+          savePortfolio(req, port, summary, function(){
+            res.redirect("/summary");
           });
         });
-      }
+      });
+    }
   });
 }
 
@@ -167,10 +180,8 @@ exports.buyStock = function(req,res){
   var ticker = (req.body.ticker).toUpperCase().replace(/\ /g, '');
   var number = Number(req.body.shares);
   //invalidate the cache
-  var stock_key = req.user.id + "stockdata";
-  var summary_key = req.user.id + "summary";
-  cache.delete(stock_key, function(err, reply){});
-  cache.delete(summary_key, function(err, reply){});
+  cache.delete(getStockKey(req), function(err, reply){});
+  cache.delete(getSummaryKey(req), function(err, reply){});
   getStockData(req, res, function(stock_data){
     if(stock_data[ticker] === undefined){
       stock_data[ticker] = {};
@@ -181,10 +192,11 @@ exports.buyStock = function(req,res){
     stock_update = JSON.stringify(stock_data);
     updatePortfolio(stock_update, function(port){
       summarizePortfolio(port, function(summary){
-        savePortfolio(req, port, summary);
-        res.redirect("/summary");
+        savePortfolio(req, port, summary, function(){
+          res.redirect("/summary");
         });
       });
+    });
   });
 }
 
